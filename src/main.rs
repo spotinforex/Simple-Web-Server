@@ -1,5 +1,8 @@
+use single_thread::ThreadPool;
 use std::{
     fs,
+    thread,
+    time::Duration,
     io::{BufReader, prelude::*},
     net::{TcpListener, TcpStream},
 };
@@ -7,11 +10,16 @@ use std::{
 /// Recieves Incoming Requests
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    // Creating A Thread Pool
+    let pool = ThreadPool::new(4);
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
-        
-        handle_connection(stream);
+
+        // Running The Server Inside the Thread Pool
+        pool.execute(|| {
+            handle_connection(stream);
+        });
     }
 }
 
@@ -21,10 +29,13 @@ fn handle_connection(mut stream: TcpStream) {
     let request_line = buf_reader.lines().next().unwrap().unwrap();
 
     // Handles the main page and treat any other page as an error 
-    let (status_line,filename) = if request_line == "GET / HTTP/1.1" {
+    let (status_line,filename) = match &request_line[..] { 
+        "GET / HTTP/1.1" => ("HTTP/1.1 200 OK\r\n\r\n","hello.html"),
+        "GET /sleep HTTP/1.1" => {
+            thread::sleep(Duration::from_secs(5));
             ("HTTP/1.1 200 OK\r\n\r\n","hello.html")
-        } else {
-            ("HTTP/1.1 400 404 PAGE NOT FOUND", "404.html")
+        },
+        _ => ("HTTP/1.1 400 404 PAGE NOT FOUND", "404.html")
         };
 
         // Opens and Read Html File 
